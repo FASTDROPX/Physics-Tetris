@@ -82,7 +82,8 @@ class MenuFitTest {
                             resume = saved,
                             soundOn = true, vibrationOn = true, physicsOn = false,
                             showKeyboardHelp = keyboard,
-                            onStats = {}, onBoard = {}, onSound = {}, onVibration = {},
+                            onStats = {}, onBoard = {}, onSettings = {},
+                            onSound = {}, onVibration = {},
                             onPhysics = {}, onPlay = {}, onResume = {}, onRestart = {},
                         )
                     }

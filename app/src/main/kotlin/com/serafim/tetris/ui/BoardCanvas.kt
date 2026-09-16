@@ -22,11 +22,14 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-private val GridLine = Color(0x0DE3E3E3)      // rgba(227,227,227,.05)
-private val TrailTop = Color(0x00A8C7FA)
-private val PopStroke = Color(0xE6131619)     // rgba(19,22,25,.9)
-private val PopSub = Color(0xEBE3E3E3)        // rgba(227,227,227,.92)
-private val SweepColor = Color(0xFFA8C7FA)
+// Цвета стакана берутся из темы при каждой отрисовке, а не один раз при
+// загрузке: иначе в AMOLED и Monet сетка, след и обводка очков остались бы
+// цветами тёмной темы. Доли прозрачности — те же, что были в CSS.
+private val GridLine: Color get() = M3.OnSurface.copy(alpha = 0x0D / 255f)   // rgba(227,227,227,.05)
+private val TrailTop: Color get() = M3.Primary.copy(alpha = 0f)
+private val PopStroke: Color get() = M3.Surface.copy(alpha = 0xE6 / 255f)    // rgba(19,22,25,.9)
+private val PopSub: Color get() = M3.OnSurface.copy(alpha = 0xEB / 255f)     // rgba(227,227,227,.92)
+private val SweepColor: Color get() = M3.Primary
 
 private val popPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     textAlign = Paint.Align.CENTER

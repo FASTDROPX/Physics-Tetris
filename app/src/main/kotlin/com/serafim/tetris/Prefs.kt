@@ -42,6 +42,25 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_PHYSICS, false)
         set(v) { sp.edit().putBoolean(KEY_PHYSICS, v).apply() }
 
+    /**
+     * Громкость звуков, 0..1. Переключатель звука отвечает за «вообще ли
+     * звучит», а это — за «насколько громко»; по умолчанию во весь голос,
+     * как было до появления настройки.
+     */
+    var soundVolume: Float
+        get() = sp.getFloat(KEY_VOLUME, 1f).coerceIn(0f, 1f)
+        set(v) { sp.edit().putFloat(KEY_VOLUME, v.coerceIn(0f, 1f)).apply() }
+
+    /** Сила отдачи, 0..1. */
+    var vibrationPower: Float
+        get() = sp.getFloat(KEY_VIB_POWER, 1f).coerceIn(0f, 1f)
+        set(v) { sp.edit().putFloat(KEY_VIB_POWER, v.coerceIn(0f, 1f)).apply() }
+
+    /** Выбранная тема; неизвестное имя читается как тёмная. */
+    var themeName: String
+        get() = sp.getString(KEY_THEME, "") ?: ""
+        set(v) { sp.edit().putString(KEY_THEME, v).apply() }
+
     val statScore: Long get() = sp.getLong(KEY_STAT_SCORE, 0L)
     val statPieces: Long get() = sp.getLong(KEY_STAT_PIECES, 0L)
     val statLines: Long get() = sp.getLong(KEY_STAT_LINES, 0L)
@@ -107,6 +126,9 @@ class Prefs(context: Context) {
         const val KEY_SOUND = "sound"
         const val KEY_VIBRATION = "vibration"
         const val KEY_PHYSICS = "physics"
+        const val KEY_VOLUME = "soundVolume"
+        const val KEY_VIB_POWER = "vibrationPower"
+        const val KEY_THEME = "theme"
         const val KEY_STAT_SCORE = "statScore"
         const val KEY_STAT_PIECES = "statPieces"
         const val KEY_STAT_LINES = "statLines"

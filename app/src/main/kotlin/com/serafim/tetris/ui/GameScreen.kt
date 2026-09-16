@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
@@ -209,6 +210,7 @@ fun GameScreen(ctrl: Controller, frame: Int, keyboardAttached: Boolean) {
                 showKeyboardHelp = keyboardAttached,
                 onStats = { ctrl.openStats() },
                 onBoard = { ctrl.openBoard() },
+                onSettings = { ctrl.openSettings() },
                 onSound = { ctrl.toggleSound() },
                 onVibration = { ctrl.toggleVibration() },
                 onPhysics = { ctrl.togglePhysics() },
@@ -251,6 +253,25 @@ fun GameScreen(ctrl: Controller, frame: Int, keyboardAttached: Boolean) {
             )
 
             else -> Unit
+        }
+
+        // настройки открываются поверх меню и им же закрываются
+        if (ctrl.showSettings && game.state == GameState.MENU) {
+            val context = LocalContext.current
+            SettingsSheet(
+                closing = false,
+                large = maxWidth >= 900.dp && maxHeight >= 720.dp,
+                soundOn = ctrl.soundOn,
+                volume = ctrl.soundVolume,
+                vibrationOn = ctrl.vibrationOn,
+                power = ctrl.vibrationPower,
+                theme = ctrl.theme,
+                onVolume = { v, preview -> ctrl.setSoundVolume(v, preview) },
+                onPower = { v, preview -> ctrl.setVibrationPower(v, preview) },
+                onTheme = { ctrl.chooseTheme(it) },
+                onGithub = { ctrl.click(); openLink(context, SOURCES_URL) },
+                onBack = { ctrl.closeSettings() },
+            )
         }
 
         // статистика открывается поверх меню и им же закрывается
@@ -303,7 +324,8 @@ fun GameScreen(ctrl: Controller, frame: Int, keyboardAttached: Boolean) {
         }
         // системная «Назад» закрывает окно поверх меню, а не всё приложение
         BackHandler(
-            enabled = (ctrl.showStats || ctrl.showBoard || ctrl.showRestartConfirm) &&
+            enabled = (ctrl.showStats || ctrl.showBoard || ctrl.showSettings ||
+                ctrl.showRestartConfirm) &&
                 game.state == GameState.MENU,
         ) {
             ctrl.dismissTop()

@@ -196,6 +196,15 @@ class ToneEngine(private val context: Context) {
     @Volatile
     var on: Boolean = true
 
+    /**
+     * Громкость, 0..1. Задаётся не при синтезе, а при проигрывании: сэмплы
+     * лежат в кэше одни на все громкости, и ползунок меняет звук сразу,
+     * без пересборки.
+     */
+    @Volatile
+    var volume: Float = 1f
+        set(value) { field = value.coerceIn(0f, 1f) }
+
     private val pool: SoundPool = SoundPool.Builder()
         .setMaxStreams(12)
         .setAudioAttributes(
@@ -245,7 +254,9 @@ class ToneEngine(private val context: Context) {
         val id = synchronized(ids) { ids[key] } ?: return
         val loaded = synchronized(ready) { ready.contains(id) }
         if (!loaded) return
-        pool.play(id, 1f, 1f, 1, 0, 1f)
+        val v = volume
+        if (v <= 0f) return
+        pool.play(id, v, v, 1, 0, 1f)
     }
 
     fun play(s: Sfx) = playKey(s.name)

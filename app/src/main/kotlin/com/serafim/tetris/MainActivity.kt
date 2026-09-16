@@ -36,6 +36,7 @@ import com.serafim.tetris.ui.BootScreen
 import com.serafim.tetris.ui.FallingBackground
 import com.serafim.tetris.ui.GameScreen
 import com.serafim.tetris.ui.M3
+import com.serafim.tetris.ui.paletteOf
 import com.serafim.tetris.ui.TetrisTheme
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +66,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             val scope = rememberCoroutineScope()
             val ctrl = remember { Controller(game, fx, prefs, scope).also { controller = it } }
-            TetrisTheme { App(ctrl) }
+            // палитра пересчитывается только при смене темы: у Monet за ней
+            // стоит обращение к системным цветам, и делать его каждый кадр незачем
+            val context = LocalContext.current
+            val palette = remember(ctrl.theme) { paletteOf(ctrl.theme, context) }
+            TetrisTheme(palette) { App(ctrl) }
         }
     }
 

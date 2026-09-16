@@ -1,6 +1,7 @@
 package com.serafim.tetris
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +11,7 @@ import com.serafim.tetris.game.Sfx
 import com.serafim.tetris.game.peekSave
 import com.serafim.tetris.game.TetrisGame
 import com.serafim.tetris.online.Leaderboard
+import com.serafim.tetris.ui.ThemeKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -39,6 +41,20 @@ class Controller(
     var vibrationOn by mutableStateOf(prefs.vibrationOn)
         private set
     var physicsOn by mutableStateOf(prefs.physicsOn)
+        private set
+
+    /** Громкость звуков и сила отдачи, 0..1 — ползунки в настройках. */
+    var soundVolume by mutableFloatStateOf(prefs.soundVolume)
+        private set
+    var vibrationPower by mutableFloatStateOf(prefs.vibrationPower)
+        private set
+
+    /** Выбранная тема. Что она делает с цветами — в ui/Theme.kt. */
+    var theme by mutableStateOf(ThemeKind.of(prefs.themeName))
+        private set
+
+    /** Окно настроек поверх меню. */
+    var showSettings by mutableStateOf(false)
         private set
 
     /** Окно статистики поверх меню. */
@@ -83,7 +99,9 @@ class Controller(
 
     init {
         fx.soundOn = soundOn
+        fx.soundVolume = soundVolume
         fx.vibrationOn = vibrationOn
+        fx.vibrationPower = vibrationPower
         game.physicsMode = prefs.physicsOn
         game.restoreProgress(prefs.xpTotal, prefs.xpRank, prefs.best)
         game.stats.restore(
@@ -152,6 +170,10 @@ class Controller(
 
     fun openStats() { click(); showStats = true }
 
+    fun openSettings() { click(); showSettings = true }
+
+    fun closeSettings() { click(); showSettings = false }
+
     fun openBoard() { click(); showBoard = true; board.open() }
 
     fun closeBoard() { click(); showBoard = false }
@@ -191,6 +213,7 @@ class Controller(
     fun dismissTop(): Boolean {
         if (showRestartConfirm) { cancelRestart(); return true }
         if (showResetConfirm) { cancelResetStats(); return true }
+        if (showSettings) { closeSettings(); return true }
         if (showStats) { closeStats(); return true }
         if (showBoard) { closeBoard(); return true }
         return false
@@ -266,6 +289,33 @@ class Controller(
     }
 
     fun toggleVibration() = setVibration(!vibrationOn)
+
+    /**
+     * Громкость. Звук нового уровня даётся сразу — ползунок без отклика
+     * пришлось бы крутить вслепую; но только когда палец отпущен, иначе
+     * при протягивании получилась бы очередь щелчков.
+     */
+    fun setSoundVolume(v: Float, preview: Boolean = false) {
+        soundVolume = v.coerceIn(0f, 1f)
+        fx.soundVolume = soundVolume
+        prefs.soundVolume = soundVolume
+        if (preview && soundOn && soundVolume > 0f) fx.sound(Sfx.ROTATE)
+    }
+
+    /** Сила отдачи — с таким же пробным толчком по отпусканию ползунка. */
+    fun setVibrationPower(v: Float, preview: Boolean = false) {
+        vibrationPower = v.coerceIn(0f, 1f)
+        fx.vibrationPower = vibrationPower
+        prefs.vibrationPower = vibrationPower
+        if (preview && vibrationOn && vibrationPower > 0f) fx.vibrate(14, 45, 14)
+    }
+
+    /** Тема. Цвета подставляются сами: их держит состояние Compose. */
+    fun chooseTheme(kind: ThemeKind) {
+        click()
+        theme = kind
+        prefs.themeName = kind.name
+    }
 
     /**
      * Режим физики меняет правила целиком, поэтому включается только на

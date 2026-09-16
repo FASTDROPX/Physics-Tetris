@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import com.serafim.tetris.game.Fx
 import com.serafim.tetris.game.Sfx
 import com.serafim.tetris.sound.ToneEngine
+import kotlin.math.roundToInt
 
 /** Чип с названием комбинации: текст плюс счётчик, чтобы перезапускать анимацию. */
 data class ChipMessage(val text: String, val key: Int)
@@ -52,9 +53,24 @@ class AndroidFx(context: Context) : Fx {
         get() = tones.on
         set(value) { tones.on = value }
 
+    /** Громкость звуков, 0..1 — ползунок в настройках. */
+    var soundVolume: Float
+        get() = tones.volume
+        set(value) { tones.volume = value }
+
     /** Отдельный переключатель: звук и отдача независимы. */
     @Volatile
     var vibrationOn: Boolean = true
+
+    /**
+     * Сила отдачи, 0..1. Там, где мотор умеет менять размах, ползунок им и
+     * правит. Там, где не умеет (простая «таблетка» на оси, как в Redmi
+     * 10C), силы у мотора одна, и остаётся укорачивать сам толчок — но не
+     * ниже [MIN_BUZZ], иначе он не успеет тронуться и пропадёт совсем.
+     */
+    @Volatile
+    var vibrationPower: Float = 1f
+        set(value) { field = value.coerceIn(0f, 1f) }
 
     override fun sound(s: Sfx) = tones.play(s)
 
@@ -76,15 +92,23 @@ class AndroidFx(context: Context) : Fx {
      */
     override fun vibrate(vararg pattern: Long) {
         if (!vibrationOn) return
+        val power = vibrationPower
+        if (power <= 0f) return
         val v = vibrator ?: return
         if (!v.hasVibrator() || pattern.isEmpty()) return
-        val timings = timings(pattern)
+        val strong = v.hasAmplitudeControl()
+        // размах мотор менять умеет — рисунок оставляем как есть; не умеет —
+        // ослабляем его укорачиванием толчков
+        val timings = if (strong) timings(pattern) else timings(shorten(pattern, power))
+        val amp = amplitude(power)
         val fired = runCatching {
             val effect = if (pattern.size == 1) {
-                VibrationEffect.createOneShot(timings[1], VibrationEffect.DEFAULT_AMPLITUDE)
-            } else if (v.hasAmplitudeControl()) {
-                // на полную силу: слабая отдача на таком моторе не чувствуется
-                val amps = IntArray(timings.size) { if (it % 2 == 1) 255 else 0 }
+                VibrationEffect.createOneShot(
+                    timings[1],
+                    if (strong) amp else VibrationEffect.DEFAULT_AMPLITUDE,
+                )
+            } else if (strong) {
+                val amps = IntArray(timings.size) { if (it % 2 == 1) amp else 0 }
                 VibrationEffect.createWaveform(timings, amps, -1)
             } else {
                 VibrationEffect.createWaveform(timings, -1)
@@ -113,6 +137,26 @@ class AndroidFx(context: Context) : Fx {
     companion object {
         /** Ниже этого мотор в простом телефоне не успевает раскрутиться. */
         const val MIN_BUZZ = 30L
+
+        /**
+         * Размах мотора под ползунок. Ноль здесь означал бы «молчать», а
+         * молчание решается раньше, поэтому снизу единица.
+         */
+        fun amplitude(power: Float): Int =
+            (255f * power.coerceIn(0f, 1f)).roundToInt().coerceIn(1, 255)
+
+        /**
+         * Ослабление для моторов без размаха: толчки укорачиваются, паузы
+         * остаются — иначе рассыпался бы рисунок. Ниже [MIN_BUZZ] толчок не
+         * опускается: там он просто пропадает.
+         */
+        fun shorten(pattern: LongArray, power: Float, min: Long = MIN_BUZZ): LongArray {
+            val k = power.coerceIn(0f, 1f)
+            return LongArray(pattern.size) { i ->
+                val ms = pattern[i]
+                if (i % 2 == 0 && ms > 0) (ms * k).toLong().coerceAtLeast(min) else ms
+            }
+        }
 
         /**
          * Рисунок браузера [работа, пауза, работа…] — в рисунок Android

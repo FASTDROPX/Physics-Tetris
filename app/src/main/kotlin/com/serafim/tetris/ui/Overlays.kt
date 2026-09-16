@@ -70,8 +70,11 @@ import com.serafim.tetris.online.Standing
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-/** Затемнение под окном: rgba(19,22,25,.86), как в CSS. */
-val SCRIM = Color(0xDB131619)
+/**
+ * Затемнение под окном: rgba(19,22,25,.86), как в CSS, — но цвет фона
+ * берётся из темы, чтобы в AMOLED под окном был чёрный, а не серый.
+ */
+val SCRIM: Color get() = M3.Surface.copy(alpha = 0xDB / 255f)
 
 /** Доли высоты экрана над карточкой и под ней. */
 class MenuBand(val top: Float, val bottom: Float)
@@ -279,6 +282,7 @@ fun MenuSheet(
     showKeyboardHelp: Boolean,
     onStats: () -> Unit,
     onBoard: () -> Unit,
+    onSettings: () -> Unit,
     onSound: () -> Unit,
     onVibration: () -> Unit,
     onPhysics: () -> Unit,
@@ -415,7 +419,11 @@ fun MenuSheet(
                 }
             }
         }
-        Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) {
+        Row(
+            Modifier.align(Alignment.TopEnd).padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RiseIn(t, 60f) { SettingsButton(onSettings) }
             RiseIn(t, 60f) { StatsButton(onStats) }
         }
         Box(Modifier.align(Alignment.TopStart).padding(6.dp)) {
