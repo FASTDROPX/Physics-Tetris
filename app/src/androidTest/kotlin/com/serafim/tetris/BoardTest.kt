@@ -372,4 +372,55 @@ class BoardTest {
             prefs.nick = oldNick
         }
     }
+
+    /**
+     * Потолок очков и запрет на откат назад. Правила живут только на
+     * сервере, поэтому и проверяются на живой базе: игра пробует записать
+     * 90 миллиардов и уменьшить свою же сумму — оба раза база обязана
+     * отказать, а строка остаться прежней. После теста в базе ничего не
+     * остаётся.
+     */
+    @Test
+    fun таблица_не_принимает_чушь() {
+        val prefs = Prefs(context)
+        val oldNick = prefs.nick
+        prefs.nick = "claude-rules"
+        try {
+            runBlocking {
+                val board = Leaderboard(prefs, this)
+                withTimeout(60_000) {
+                    try {
+                        board.push(best = 1_000, total = 4_000, sync = true)
+                        board.push(best = 2_000, total = 9_000, sync = true)
+                        val up = board.fetch(BoardKind.TOTAL)
+                        Log.i("BoardTest", "после роста: ${up.myValue}")
+                        assertEquals("выросшая сумма записалась", 9_000L, up.myValue)
+
+                        // те самые 90 миллиардов — выше потолка правил
+                        val huge = runCatching {
+                            board.push(best = 1_000, total = 90_000_000_000L, sync = true)
+                        }
+                        Log.i("BoardTest", "90 млрд: ${huge.exceptionOrNull()}")
+                        assertTrue("90 миллиардов не приняты", huge.isFailure)
+
+                        // и откат назад: сумма очков не уменьшается
+                        val back = runCatching {
+                            board.push(best = 2_000, total = 5_000, sync = true)
+                        }
+                        Log.i("BoardTest", "откат: ${back.exceptionOrNull()}")
+                        assertTrue("откат назад не принят", back.isFailure)
+
+                        val after = board.fetch(BoardKind.TOTAL)
+                        Log.i("BoardTest", "после отказов: ${after.myValue}")
+                        assertEquals("строка осталась прежней", 9_000L, after.myValue)
+                    } finally {
+                        runCatching { board.erase(sync = true) }
+                        runCatching { board.releaseClaim("claude-rules") }
+                    }
+                }
+            }
+        } finally {
+            prefs.nick = oldNick
+        }
+    }
 }
