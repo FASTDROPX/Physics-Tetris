@@ -218,54 +218,64 @@ private fun Toggle(label: String, on: Boolean, onToggle: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Switch(
-            checked = on,
-            onCheckedChange = { onToggle() },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = M3.OnPrimary,
-                checkedTrackColor = M3.Primary,
-                checkedBorderColor = M3.Primary,
-                uncheckedThumbColor = M3.Outline,
-                uncheckedTrackColor = M3.SurfaceContainer,
-                uncheckedBorderColor = M3.OutlineVariant,
-            ),
-        )
+        Switch(checked = on, onCheckedChange = { onToggle() }, colors = tetrisSwitchColors())
         Text(label, color = M3.OnSurface, fontSize = 14.sp)
     }
 }
+
+/** Цвета переключателя — одни на меню, паузу и настройки. */
+@Composable
+fun tetrisSwitchColors() = SwitchDefaults.colors(
+    checkedThumbColor = M3.OnPrimary,
+    checkedTrackColor = M3.Primary,
+    checkedBorderColor = M3.Primary,
+    uncheckedThumbColor = M3.Outline,
+    uncheckedTrackColor = M3.SurfaceContainer,
+    uncheckedBorderColor = M3.OutlineVariant,
+)
 
 /**
  * Звук и вибрация — два мелких тумблера в строку, режим физики отдельной
  * строкой под ними: он меняет не громкость, а сами правила, и стоять
  * вровень с ними не должен.
+ *
+ * Звук и вибрация есть только в паузе ([sound] не null): в меню они
+ * переехали в настройки, а настройки из партии не открыть.
  */
 @Composable
 private fun Switches(
     large: Boolean,
-    soundOn: Boolean,
-    vibrationOn: Boolean,
     physicsOn: Boolean,
-    onSound: () -> Unit,
-    onVibration: () -> Unit,
     onPhysics: () -> Unit,
     note: String,
     tight: Boolean = false,
+    sound: SoundToggles? = null,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(if (tight) 0.dp else 6.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Toggle("Звук", soundOn, onSound)
-            Toggle("Вибрация", vibrationOn, onVibration)
+        if (sound != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Toggle("Звук", sound.soundOn, sound.onSound)
+                Toggle("Вибрация", sound.vibrationOn, sound.onVibration)
+            }
         }
         Toggle("Режим физики", physicsOn, onPhysics)
         Lead(note, large, small = tight)
     }
 }
+
+/** Переключатели звука и вибрации для паузы. */
+private class SoundToggles(
+    val soundOn: Boolean,
+    val vibrationOn: Boolean,
+    val onSound: () -> Unit,
+    val onVibration: () -> Unit,
+)
 
 /** Главное меню. */
 @Composable
@@ -276,15 +286,11 @@ fun MenuSheet(
     titleSeed: Int,
     standing: Standing,
     resume: SaveHead?,
-    soundOn: Boolean,
-    vibrationOn: Boolean,
     physicsOn: Boolean,
     showKeyboardHelp: Boolean,
     onStats: () -> Unit,
     onBoard: () -> Unit,
     onSettings: () -> Unit,
-    onSound: () -> Unit,
-    onVibration: () -> Unit,
     onPhysics: () -> Unit,
     onPlay: () -> Unit,
     onResume: () -> Unit,
@@ -337,11 +343,7 @@ fun MenuSheet(
                 RiseIn(t, 380f) {
                     Switches(
                         large = large,
-                        soundOn = soundOn,
-                        vibrationOn = vibrationOn,
                         physicsOn = physicsOn,
-                        onSound = onSound,
-                        onVibration = onVibration,
                         onPhysics = onPhysics,
                         note = "Блоки падают и заваливаются по-настоящему. Ряд срезается, " +
                             "когда до полного не хватает одной клетки.",
@@ -812,13 +814,10 @@ fun PauseSheet(
             RiseIn(t, 180f) {
                 Switches(
                     large = large,
-                    soundOn = soundOn,
-                    vibrationOn = vibrationOn,
                     physicsOn = physicsOn,
-                    onSound = onSound,
-                    onVibration = onVibration,
                     onPhysics = onPhysics,
                     note = "Режим физики сменится со следующей партии.",
+                    sound = SoundToggles(soundOn, vibrationOn, onSound, onVibration),
                 )
             }
             RiseIn(t, 300f) {

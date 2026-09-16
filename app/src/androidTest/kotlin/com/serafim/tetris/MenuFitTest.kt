@@ -80,10 +80,9 @@ class MenuFitTest {
                             // самый длинный из возможных вариантов карточки места
                             standing = Standing.Placed(12, "Кот Василий", 82_302, leader = false),
                             resume = saved,
-                            soundOn = true, vibrationOn = true, physicsOn = false,
+                            physicsOn = false,
                             showKeyboardHelp = keyboard,
                             onStats = {}, onBoard = {}, onSettings = {},
-                            onSound = {}, onVibration = {},
                             onPhysics = {}, onPlay = {}, onResume = {}, onRestart = {},
                         )
                     }

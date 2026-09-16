@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,11 +65,12 @@ fun openLink(context: Context, url: String) {
 }
 
 /**
- * Настройки: громкость, сила отдачи и тема, а внизу ссылка на исходники.
+ * Настройки: звук и вибрация, тема, а внизу ссылка на GitHub.
  *
- * Переключатели «Звук» и «Вибрация» остались в меню и отвечают за «звучит
- * ли вообще»; здесь — насколько громко и насколько сильно. Ноль на
- * ползунке равносилен выключенному переключателю.
+ * Звук и вибрация здесь целиком: переключатель в строке заголовка решает,
+ * звучит ли вообще, ползунок под ним — насколько громко или сильно. Раньше
+ * переключатели жили в меню, а здесь вместо них стояла надпись «выключен в
+ * меню» — она переносилась на две строки и наезжала на заголовок.
  */
 @Composable
 fun SettingsSheet(
@@ -77,6 +81,8 @@ fun SettingsSheet(
     vibrationOn: Boolean,
     power: Float,
     theme: ThemeKind,
+    onSound: () -> Unit,
+    onVibration: () -> Unit,
     onVolume: (Float, Boolean) -> Unit,
     onPower: (Float, Boolean) -> Unit,
     onTheme: (ThemeKind) -> Unit,
@@ -98,19 +104,19 @@ fun SettingsSheet(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     LevelSlider(
-                        title = "Громкость звука",
+                        title = "Звук",
+                        on = soundOn,
                         value = volume,
-                        enabled = soundOn,
-                        offNote = "Звук выключен в меню",
                         large = large,
+                        onToggle = onSound,
                         onChange = onVolume,
                     )
                     LevelSlider(
-                        title = "Сила вибрации",
+                        title = "Вибрация",
+                        on = vibrationOn,
                         value = power,
-                        enabled = vibrationOn,
-                        offNote = "Вибрация выключена в меню",
                         large = large,
+                        onToggle = onVibration,
                         onChange = onPower,
                     )
                 }
@@ -153,53 +159,67 @@ fun SettingsSheet(
 }
 
 /**
- * Ползунок с подписью и процентами. Пока палец ведёт, значение идёт в
- * игру сразу (иначе громкость крутили бы вслепую), но пробный звук и
- * толчок даются только по отпусканию — иначе вышла бы очередь щелчков.
+ * Звук или вибрация: заголовок с переключателем, под ним ползунок и
+ * проценты. Выключено — ползунок гаснет, но значение помнит: включите
+ * обратно, и громкость будет прежней.
+ *
+ * Пока палец ведёт, значение идёт в игру сразу (иначе громкость крутили бы
+ * вслепую), но пробный звук и толчок даются только по отпусканию — иначе
+ * вышла бы очередь щелчков.
  */
 @Composable
 private fun LevelSlider(
     title: String,
+    on: Boolean,
     value: Float,
-    enabled: Boolean,
-    offNote: String,
     large: Boolean,
+    onToggle: () -> Unit,
     onChange: (Float, Boolean) -> Unit,
 ) {
     // своё значение на время перетаскивания: ползунок обязан идти за
     // пальцем ровно, не дожидаясь, пока состояние вернётся сверху
     var live by remember(value) { mutableFloatStateOf(value) }
+    val dim = M3.OnSurfaceVariant.copy(alpha = 0.5f)
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp),
+            Modifier.fillMaxWidth().padding(start = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                title,
-                color = if (enabled) M3.OnSurface else M3.OnSurfaceVariant.copy(alpha = 0.5f),
-                fontSize = if (large) 16.sp else 15.sp,
+            Text(title, color = M3.OnSurface, fontSize = if (large) 17.sp else 16.sp)
+            Switch(checked = on, onCheckedChange = { onToggle() }, colors = tetrisSwitchColors())
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Slider(
+                value = live,
+                onValueChange = { live = it; onChange(it, false) },
+                onValueChangeFinished = { onChange(live, true) },
+                enabled = on,
+                modifier = Modifier.weight(1f),
+                colors = SliderDefaults.colors(
+                    thumbColor = M3.Primary,
+                    activeTrackColor = M3.Primary,
+                    inactiveTrackColor = M3.SurfaceContainerHighest,
+                    disabledThumbColor = M3.OutlineVariant,
+                    disabledActiveTrackColor = M3.OutlineVariant,
+                    disabledInactiveTrackColor = M3.SurfaceContainerHigh,
+                ),
             )
+            // ширина под «100 %», чтобы ползунок не дёргался, когда число
+            // перескакивает с двух знаков на три
             Text(
-                if (enabled) "${(live * 100).roundToInt()} %" else offNote,
-                color = M3.OnSurfaceVariant.copy(alpha = if (enabled) 1f else 0.5f),
+                "${(live * 100).roundToInt()} %",
+                color = if (on) M3.OnSurfaceVariant else dim,
                 fontSize = if (large) 14.sp else 13.sp,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                modifier = Modifier.width(44.dp),
             )
         }
-        Slider(
-            value = live,
-            onValueChange = { live = it; onChange(it, false) },
-            onValueChangeFinished = { onChange(live, true) },
-            enabled = enabled,
-            colors = SliderDefaults.colors(
-                thumbColor = M3.Primary,
-                activeTrackColor = M3.Primary,
-                inactiveTrackColor = M3.SurfaceContainerHighest,
-                disabledThumbColor = M3.OutlineVariant,
-                disabledActiveTrackColor = M3.OutlineVariant,
-                disabledInactiveTrackColor = M3.SurfaceContainerHigh,
-            ),
-        )
     }
 }
 
@@ -344,16 +364,16 @@ private const val OUT_ARROW =
     "M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
 
 /**
- * Шестерёнка: шесть узких зубцов и отверстие посередине. Посчитана, а не
- * срисована, и узость зубцов здесь главное: линия толщиной в два деления
- * заливала промежутки между широкими зубцами, и значок сливался в кляксу
- * рядом с тонкими соседями. Сейчас между зубцами по дуге около пяти
- * делений — после толщины линии остаётся почти три видимых.
+ * Шестерёнка: шесть зубцов и отверстие посередине. Посчитана, а не
+ * срисована. Зубцы высотой в 3,4 деления сетки, 30° у основания и 18° у края —
+ * сужаются наружу, как у настоящей шестерни:
+ * мельче они терялись на 22 dp, а при восьми и широких линия заливала
+ * промежутки между ними.
  */
 private const val GEAR =
-    "M10.59 4.74L10.81 2.27L13.19 2.27L13.41 4.74A7.4 7.4 0 0 1 17.58 7.15" +
-        "L19.83 6.1L21.02 8.17L19 9.59A7.4 7.4 0 0 1 19 14.41L21.02 15.83L19.83 17.9" +
-        "L17.58 16.85A7.4 7.4 0 0 1 13.41 19.26L13.19 21.73L10.81 21.73L10.59 19.26" +
-        "A7.4 7.4 0 0 1 6.42 16.85L4.17 17.9L2.98 15.83L5 14.41A7.4 7.4 0 0 1 5 9.59" +
-        "L2.98 8.17L4.17 6.1L6.42 7.15A7.4 7.4 0 0 1 10.59 4.74 Z" +
-        "M15.2 12a3.2 3.2 0 1 1-6.4 0 3.2 3.2 0 0 1 6.4 0Z"
+    "M10.08 4.85L10.31 1.33L13.69 1.33L13.92 4.85A7.4 7.4 0 0 1 17.23 6.77" +
+        "L20.39 5.2L22.08 8.13L19.15 10.08A7.4 7.4 0 0 1 19.15 13.92L22.08 15.87" +
+        "L20.39 18.8L17.23 17.23A7.4 7.4 0 0 1 13.92 19.15L13.69 22.67L10.31 22.67" +
+        "L10.08 19.15A7.4 7.4 0 0 1 6.77 17.23L3.61 18.8L1.92 15.87L4.85 13.92" +
+        "A7.4 7.4 0 0 1 4.85 10.08L1.92 8.13L3.61 5.2L6.77 6.77" +
+        "A7.4 7.4 0 0 1 10.08 4.85ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"

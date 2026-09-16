@@ -18,6 +18,14 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -99,6 +107,8 @@ class SettingsTest {
         var volume by mutableFloatStateOf(0.7f)
         var power by mutableFloatStateOf(0.4f)
         var theme by mutableStateOf(ThemeKind.DARK)
+        var soundOn by mutableStateOf(true)
+        var vibrationOn by mutableStateOf(true)
         var opened = 0
         rule.mainClock.autoAdvance = false
         rule.setContent {
@@ -108,11 +118,13 @@ class SettingsTest {
                         SettingsSheet(
                             closing = false,
                             large = false,
-                            soundOn = true,
+                            soundOn = soundOn,
                             volume = volume,
-                            vibrationOn = true,
+                            vibrationOn = vibrationOn,
                             power = power,
                             theme = theme,
+                            onSound = { soundOn = !soundOn },
+                            onVibration = { vibrationOn = !vibrationOn },
                             onVolume = { v, _ -> volume = v },
                             onPower = { v, _ -> power = v },
                             onTheme = { theme = it },
@@ -127,10 +139,27 @@ class SettingsTest {
         save("87_settings", rule.onRoot().captureToImage().asAndroidBitmap())
 
         rule.onNodeWithText("Настройки").assertExists()
-        rule.onNodeWithText("Громкость звука").assertExists()
+        rule.onNodeWithText("Звук").assertExists()
         rule.onNodeWithText("70 %").assertExists()
-        rule.onNodeWithText("Сила вибрации").assertExists()
+        rule.onNodeWithText("Вибрация").assertExists()
         rule.onNodeWithText("40 %").assertExists()
+        // надписей «выключен в меню» больше нет — их место заняли переключатели
+        rule.onAllNodesWithText("выключен", substring = true).assertCountEquals(0)
+
+        // переключатели звука и вибрации — в самом окне, и они работают
+        val switches = rule.onAllNodes(isToggleable())
+        switches.assertCountEquals(2)
+        switches[0].assertIsOn()
+        switches[0].performClick()
+        rule.mainClock.advanceTimeBy(300)
+        assertEquals("звук выключился", false, soundOn)
+        switches[1].performClick()
+        rule.mainClock.advanceTimeBy(300)
+        assertEquals("вибрация выключилась", false, vibrationOn)
+        save("87_settings_switched_off", rule.onRoot().captureToImage().asAndroidBitmap())
+        switches[0].performClick()
+        switches[1].performClick()
+        rule.mainClock.advanceTimeBy(300)
         for (kind in ThemeKind.entries) rule.onNodeWithText(kind.title).assertExists()
         rule.onNodeWithText("GitHub").assertExists()
 
@@ -160,6 +189,8 @@ class SettingsTest {
                             vibrationOn = false,
                             power = 1f,
                             theme = ThemeKind.DARK,
+                            onSound = {},
+                            onVibration = {},
                             onVolume = { _, _ -> },
                             onPower = { _, _ -> },
                             onTheme = {},
@@ -172,9 +203,19 @@ class SettingsTest {
         }
         rule.mainClock.advanceTimeBy(2000)
         save("89_settings_off", rule.onRoot().captureToImage().asAndroidBitmap())
-        // вместо процентов стоит объяснение, почему ползунок не работает
-        rule.onNodeWithText("Звук выключен в меню").assertExists()
-        rule.onNodeWithText("Вибрация выключена в меню").assertExists()
+        // оба переключателя выключены, оба ползунка погашены, а проценты
+        // остаются на месте: включите обратно — громкость будет прежней
+        rule.onAllNodes(isToggleable()).apply {
+            assertCountEquals(2)
+            get(0).assertIsOff()
+            get(1).assertIsOff()
+        }
+        rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).apply {
+            assertCountEquals(2)
+            get(0).assertIsNotEnabled()
+            get(1).assertIsNotEnabled()
+        }
+        rule.onAllNodesWithText("100 %").assertCountEquals(2)
     }
 
     @Test

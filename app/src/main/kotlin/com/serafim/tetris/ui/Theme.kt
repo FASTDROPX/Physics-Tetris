@@ -47,7 +47,7 @@ enum class ThemeKind(val title: String, val note: String) {
     MONET("Monet", "Цвета обоев телефона"),
 
     /** Чёрный по-настоящему: на OLED-экране такие пиксели просто гаснут. */
-    AMOLED("AMOLED", "Чистый чёрный для OLED-экрана"),
+    AMOLED("AMOLED", "Чистый чёрный фон"),
     ;
 
     companion object {
