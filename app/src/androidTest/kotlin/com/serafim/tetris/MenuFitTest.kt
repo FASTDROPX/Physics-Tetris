@@ -28,6 +28,8 @@ import com.serafim.tetris.ui.M3
 import com.serafim.tetris.ui.MenuSheet
 import com.serafim.tetris.ui.TIPS
 import com.serafim.tetris.ui.TetrisTheme
+import com.serafim.tetris.ui.StreakView
+import com.serafim.tetris.game.StreakState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -79,10 +81,16 @@ class MenuFitTest {
                             tipIndex = longest, titleSeed = 1,
                             // самый длинный из возможных вариантов карточки места
                             standing = Standing.Placed(12, "Кот Василий", 82_302, leader = false),
+                            // самая длинная подпись серии — вместе с рекордом
+                            streak = StreakView(
+                                days = 12, best = 47, state = StreakState.LIT, totalDays = 80,
+                                history = List(42) { (it % 5) * 240_000L }, weekday = 3,
+                            ),
+                            animate = false,
                             resume = saved,
                             physicsOn = false,
                             showKeyboardHelp = keyboard,
-                            onStats = {}, onBoard = {}, onSettings = {},
+                            onStats = {}, onBoard = {}, onSettings = {}, onStreak = {},
                             onPhysics = {}, onPlay = {}, onResume = {}, onRestart = {},
                         )
                     }

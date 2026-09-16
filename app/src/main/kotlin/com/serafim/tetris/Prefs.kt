@@ -56,6 +56,11 @@ class Prefs(context: Context) {
         get() = sp.getFloat(KEY_VIB_POWER, 1f).coerceIn(0f, 1f)
         set(v) { sp.edit().putFloat(KEY_VIB_POWER, v.coerceIn(0f, 1f)).apply() }
 
+    /** Серия дней подряд и игра по дням — одной строкой, см. Streak.encode. */
+    var streak: String
+        get() = sp.getString(KEY_STREAK, "") ?: ""
+        set(v) { sp.edit().putString(KEY_STREAK, v).apply() }
+
     /** Выбранная тема; неизвестное имя читается как тёмная. */
     var themeName: String
         get() = sp.getString(KEY_THEME, "") ?: ""
@@ -129,6 +134,7 @@ class Prefs(context: Context) {
         const val KEY_VOLUME = "soundVolume"
         const val KEY_VIB_POWER = "vibrationPower"
         const val KEY_THEME = "theme"
+        const val KEY_STREAK = "streak"
         const val KEY_STAT_SCORE = "statScore"
         const val KEY_STAT_PIECES = "statPieces"
         const val KEY_STAT_LINES = "statLines"

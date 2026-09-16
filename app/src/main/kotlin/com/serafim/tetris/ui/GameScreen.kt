@@ -203,12 +203,15 @@ fun GameScreen(ctrl: Controller, frame: Int, keyboardAttached: Boolean) {
                 tipIndex = ctrl.tipIndex % TIPS.size,
                 titleSeed = ctrl.titleSeed,
                 standing = ctrl.board.standing,
+                streak = ctrl.streakView,
+                animate = !game.reduceMotion,
                 resume = ctrl.resume,
                 physicsOn = ctrl.physicsOn,
                 showKeyboardHelp = keyboardAttached,
                 onStats = { ctrl.openStats() },
                 onBoard = { ctrl.openBoard() },
                 onSettings = { ctrl.openSettings() },
+                onStreak = { ctrl.openStreak() },
                 onPhysics = { ctrl.togglePhysics() },
                 onPlay = { ctrl.click(); ctrl.launch() },
                 onResume = { ctrl.resumeGame() },
@@ -249,6 +252,17 @@ fun GameScreen(ctrl: Controller, frame: Int, keyboardAttached: Boolean) {
             )
 
             else -> Unit
+        }
+
+        // серия дней — поверх меню, как статистика
+        if (ctrl.showStreak && game.state == GameState.MENU) {
+            StreakSheet(
+                closing = false,
+                large = maxWidth >= 900.dp && maxHeight >= 720.dp,
+                view = ctrl.streakView,
+                animate = !game.reduceMotion,
+                onBack = { ctrl.closeStreak() },
+            )
         }
 
         // настройки открываются поверх меню и им же закрываются
@@ -322,7 +336,7 @@ fun GameScreen(ctrl: Controller, frame: Int, keyboardAttached: Boolean) {
         }
         // системная «Назад» закрывает окно поверх меню, а не всё приложение
         BackHandler(
-            enabled = (ctrl.showStats || ctrl.showBoard || ctrl.showSettings ||
+            enabled = (ctrl.showStats || ctrl.showBoard || ctrl.showSettings || ctrl.showStreak ||
                 ctrl.showRestartConfirm) &&
                 game.state == GameState.MENU,
         ) {

@@ -227,7 +227,7 @@ private const val SPIN_MS = 520f
  * между его отступами, а подписи в ней длинные, и лишние два десятка
  * точек решают, влезет ник с разрывом целиком или начнёт мельчать.
  */
-private fun Modifier.wider(extra: Dp) = this.layout { measurable, constraints ->
+internal fun Modifier.wider(extra: Dp) = this.layout { measurable, constraints ->
     val add = extra.roundToPx()
     val wide = constraints.copy(
         minWidth = constraints.minWidth + add,

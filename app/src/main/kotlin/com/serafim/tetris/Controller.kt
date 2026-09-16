@@ -6,16 +6,21 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.serafim.tetris.game.GameState
+import com.serafim.tetris.game.STREAK_HISTORY_DAYS
 import com.serafim.tetris.game.SaveHead
 import com.serafim.tetris.game.Sfx
+import com.serafim.tetris.game.Streak
+import com.serafim.tetris.game.pluralRu
 import com.serafim.tetris.game.peekSave
 import com.serafim.tetris.game.TetrisGame
 import com.serafim.tetris.online.Leaderboard
+import com.serafim.tetris.ui.StreakView
 import com.serafim.tetris.ui.ThemeKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import kotlin.random.Random
 
 /**
@@ -56,6 +61,19 @@ class Controller(
     /** Окно настроек поверх меню. */
     var showSettings by mutableStateOf(false)
         private set
+
+    /**
+     * Серия дней подряд. Сам счёт живёт в [streak], а интерфейс получает
+     * снимок [streakView] — неизменяемый, чтобы Compose его заметил.
+     */
+    private val streak = Streak().apply { decode(prefs.streak) }
+    var streakView by mutableStateOf(StreakView())
+        private set
+    var showStreak by mutableStateOf(false)
+        private set
+
+    /** Сколько времени игры уже разнесено по дням. */
+    private var creditedPlayMs = 0.0
 
     /** Окно статистики поверх меню. */
     var showStats by mutableStateOf(false)
@@ -109,13 +127,60 @@ class Controller(
         )
         lastSavedRank = game.xpRank
         lastSavedXp = game.xpTotal
+        creditedPlayMs = game.stats.timeMs
+        refreshStreak()
         board.refreshStanding(game.stats.score)
         resume = prefs.readResume()?.let { peekSave(it) }
         lastPieces = game.stats.pieces
     }
 
-    /** Опыт и рекорд пишем на диск на переходах состояния и при новом ранге. */
-    fun saveProgress() = prefs.saveProgress(game.xpTotal, game.xpRank, game.best, game.stats)
+    /** Опыт, рекорд и серию пишем на диск на переходах состояния и при новом ранге. */
+    fun saveProgress() {
+        prefs.saveProgress(game.xpTotal, game.xpRank, game.best, game.stats)
+        prefs.streak = streak.encode()
+    }
+
+    /** Сегодняшний день по часам телефона — в днях от 1 января 1970-го. */
+    private fun today(): Long = LocalDate.now().toEpochDay()
+
+    /** Снимок серии для интерфейса; зовётся, когда серия или день могли смениться. */
+    fun refreshStreak() {
+        val now = LocalDate.now()
+        val day = now.toEpochDay()
+        streakView = StreakView(
+            days = streak.shown(day),
+            best = streak.best,
+            state = streak.state(day),
+            totalDays = streak.totalDays,
+            history = streak.recent(day, STREAK_HISTORY_DAYS).toList(),
+            weekday = now.dayOfWeek.value,
+            longestDayMs = streak.longestDay(),
+        )
+    }
+
+    /**
+     * Разнести новое время игры по дням. Время берётся из той же статистики,
+     * что и «Время в игре», поэтому паузы и меню сюда не попадают. Копится
+     * секундами: дёргать серию с каждым кадром незачем.
+     */
+    private fun creditPlay() {
+        val total = game.stats.timeMs
+        // статистику сбросили — считаем заново от нового нуля
+        if (total < creditedPlayMs) creditedPlayMs = total
+        val delta = (total - creditedPlayMs).toLong()
+        if (delta < 1000L) return
+        creditedPlayMs += delta
+        if (streak.addPlay(today(), delta)) {
+            refreshStreak()
+            prefs.streak = streak.encode()
+            val n = streakView.days
+            fx.message("Серия: $n ${pluralRu(n.toLong(), "день", "дня", "дней")} подряд")
+        }
+    }
+
+    fun openStreak() { click(); refreshStreak(); showStreak = true }
+
+    fun closeStreak() { click(); showStreak = false }
 
     /**
      * Снимок незаконченной партии на диск. Делается на каждой лёгшей
@@ -195,6 +260,9 @@ class Controller(
         game.resetProgress()
         lastSavedRank = 0
         lastSavedXp = 0L
+        streak.reset()
+        creditedPlayMs = game.stats.timeMs
+        refreshStreak()
         saveProgress()
         dropGame()
         board.remove()
@@ -214,6 +282,7 @@ class Controller(
         if (showRestartConfirm) { cancelRestart(); return true }
         if (showResetConfirm) { cancelResetStats(); return true }
         if (showSettings) { closeSettings(); return true }
+        if (showStreak) { closeStreak(); return true }
         if (showStats) { closeStats(); return true }
         if (showBoard) { closeBoard(); return true }
         return false
@@ -221,8 +290,11 @@ class Controller(
 
     /** Меню каждый раз показывает новую подсказку и новые цвета заголовка. */
     fun onStateChanged(state: GameState) {
+        creditPlay()
         if (state == GameState.MENU && lastState != GameState.MENU) {
             refreshMenu()
+            // пока играли, могла наступить полночь
+            refreshStreak()
             // в меню заходят после каждой партии — там и обновляем место
             board.refreshStanding(game.stats.score)
         }

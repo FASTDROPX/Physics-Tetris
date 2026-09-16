@@ -285,12 +285,15 @@ fun MenuSheet(
     tipIndex: Int,
     titleSeed: Int,
     standing: Standing,
+    streak: StreakView,
+    animate: Boolean,
     resume: SaveHead?,
     physicsOn: Boolean,
     showKeyboardHelp: Boolean,
     onStats: () -> Unit,
     onBoard: () -> Unit,
     onSettings: () -> Unit,
+    onStreak: () -> Unit,
     onPhysics: () -> Unit,
     onPlay: () -> Unit,
     onResume: () -> Unit,
@@ -338,7 +341,13 @@ fun MenuSheet(
                 // иначе онлайн-таблица сравнивала бы разные игры — на его
                 // месте теперь место игрока и ближайший соперник
                 RiseIn(t, 330f) {
-                    StandingCard(large, standing, onBoard)
+                    // место в таблице и серия дней — две карточки вплотную,
+                    // одним блоком: на месте переключателей звука и вибрации,
+                    // переехавших в настройки
+                    Column(verticalArrangement = Arrangement.spacedBy(if (large) 8.dp else 6.dp)) {
+                        StandingCard(large, standing, onBoard)
+                        StreakCard(large, streak, animate, onStreak)
+                    }
                 }
                 RiseIn(t, 380f) {
                     Switches(
