@@ -132,14 +132,14 @@ class SettingsTest {
         rule.onNodeWithText("Сила вибрации").assertExists()
         rule.onNodeWithText("40 %").assertExists()
         for (kind in ThemeKind.entries) rule.onNodeWithText(kind.title).assertExists()
-        rule.onNodeWithText("Исходники на GitHub").assertExists()
+        rule.onNodeWithText("GitHub").assertExists()
 
         // выбор темы уходит наверх, а ссылка ведёт наружу
         rule.onNodeWithText(ThemeKind.AMOLED.title).performClick()
         rule.mainClock.advanceTimeBy(300)
         assertEquals("тема выбрана", ThemeKind.AMOLED, theme)
 
-        rule.onNodeWithText("Исходники на GitHub").performClick()
+        rule.onNodeWithText("GitHub").performClick()
         rule.mainClock.advanceTimeBy(300)
         assertEquals("ссылка нажимается", 1, opened)
         save("88_settings_amoled", rule.onRoot().captureToImage().asAndroidBitmap())

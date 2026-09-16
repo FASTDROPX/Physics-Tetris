@@ -272,7 +272,7 @@ private fun GithubRow(large: Boolean, onClick: () -> Unit) {
         GithubMark(if (large) 24.dp else 22.dp, M3.OnSurface)
         Column(Modifier.weight(1f)) {
             Text(
-                "Исходники на GitHub",
+                "GitHub",
                 color = M3.OnSurface,
                 fontSize = if (large) 16.sp else 15.sp,
             )
