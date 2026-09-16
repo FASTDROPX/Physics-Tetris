@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Значок игры: те же четыре плитки, что и в меню (Badge в Boot.kt).
+     Размер и скругление пересчитаны из коробки 56 в видимые 72 из 108,
+     поэтому на экране плитки занимают ту же долю значка. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M43.714,41.143 h6.429 a2.571,2.571 0 0 1 2.571,2.571 v6.429 a2.571,2.571 0 0 1 -2.571,2.571 h-6.429 a2.571,2.571 0 0 1 -2.571,-2.571 v-6.429 a2.571,2.571 0 0 1 2.571,-2.571 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M57.857,41.143 h6.429 a2.571,2.571 0 0 1 2.571,2.571 v6.429 a2.571,2.571 0 0 1 -2.571,2.571 h-6.429 a2.571,2.571 0 0 1 -2.571,-2.571 v-6.429 a2.571,2.571 0 0 1 2.571,-2.571 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M43.714,55.286 h6.429 a2.571,2.571 0 0 1 2.571,2.571 v6.429 a2.571,2.571 0 0 1 -2.571,2.571 h-6.429 a2.571,2.571 0 0 1 -2.571,-2.571 v-6.429 a2.571,2.571 0 0 1 2.571,-2.571 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillAlpha="0.4"
+        android:pathData="M57.857,55.286 h6.429 a2.571,2.571 0 0 1 2.571,2.571 v6.429 a2.571,2.571 0 0 1 -2.571,2.571 h-6.429 a2.571,2.571 0 0 1 -2.571,-2.571 v-6.429 a2.571,2.571 0 0 1 2.571,-2.571 z" />
+</vector>

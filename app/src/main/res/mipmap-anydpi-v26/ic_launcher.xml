@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Монохромный слой отдельный: система красит его своим цветом и берёт
+     из рисунка только прозрачность, поэтому правая нижняя плитка задана
+     там не цветом, а fillAlpha — иначе в перекрашенной иконке все четыре
+     плитки стали бы одинаковыми. Геометрия та же, что у цветной. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>

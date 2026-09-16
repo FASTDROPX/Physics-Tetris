@@ -1,0 +1,96 @@
+rules_version = '2';
+
+// Правила базы для онлайн-таблицы «Тетриса».
+// Вставить в консоли Firebase: Firestore Database → вкладка Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Потолки очков. Они не отличают хорошего игрока от подделки — они
+    // лишь не дают написать заведомую чушь вроде 90 миллиардов. Рекорд
+    // партии у живого игрока — единицы миллионов, так что запас здесь
+    // десятикратный с лишним; если кто-то в него упрётся, потолок
+    // поднимается правкой этих двух чисел в консоли.
+    function bestCap() { return 100000000; }        // 100 млн за партию
+    function totalCap() { return 1000000000; }      // 1 млрд за всё время
+
+    // Таблица лидеров: документ на игрока, ключ — его анонимный uid.
+    match /leaderboard/{uid} {
+
+      // смотреть таблицу может любой вошедший в игру
+      allow read: if request.auth != null;
+
+      // стереть можно только свою строку — это делает сброс статистики
+      allow delete: if request.auth != null && request.auth.uid == uid;
+
+      // Форма записи: только свои четыре поля, ник до 16 знаков,
+      // неотрицательные целые очки в пределах потолка, время ставит сервер.
+      function wellFormed() {
+        return request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'best', 'total', 'updated'])
+          && request.resource.data.keys().hasAll(['name', 'best', 'total', 'updated'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 16
+          && request.resource.data.best is int
+          && request.resource.data.total is int
+          && request.resource.data.best >= 0
+          && request.resource.data.total >= 0
+          && request.resource.data.best <= bestCap()
+          && request.resource.data.total <= totalCap()
+          && request.resource.data.updated == request.time;
+      }
+
+      allow create: if wellFormed();
+
+      // Очки только растут. Игра шлёт не прибавку, а всю сумму целиком,
+      // и уменьшиться она может ровно в одном случае — сброс статистики,
+      // а он ставит ровно ноль (и обычно вообще стирает строку). Всё
+      // остальное убывание — чужая рука.
+      //
+      // Сверх того одна запись не может прибавить больше, чем стоит
+      // потолок одной партии: между двумя отправками проходит не больше
+      // партии, и взяться большему неоткуда.
+      allow update: if wellFormed()
+        && (
+          request.resource.data.total == 0
+          || (
+            request.resource.data.total >= resource.data.total
+            && request.resource.data.total - resource.data.total <= bestCap()
+          )
+        )
+        && (request.resource.data.best == 0 || request.resource.data.best >= resource.data.best);
+    }
+
+    // Занятые ники: ключ документа — ник маленькими буквами, поэтому
+    // FastdropX и fastdropx — одна и та же бронь. Создать бронь можно
+    // только на себя и только поверх пустого места: изменять чужую или
+    // свою запись нельзя, а значит, двое одновременно один ник не займут.
+    match /nicks/{key} {
+
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['uid', 'name'])
+        && request.resource.data.keys().hasAll(['uid', 'name'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 16
+        // ключ обязан быть самим ником в нижнем регистре — иначе можно
+        // было бы занять одно, а показывать другое
+        && key == request.resource.data.name.lower();
+
+      // бронь снимает только её владелец: при смене ника прежняя уходит
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+
+      // переписать бронь нельзя — только снять и создать заново
+      allow update: if false;
+    }
+
+    // всё остальное закрыто
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

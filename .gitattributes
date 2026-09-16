@@ -1,0 +1,12 @@
+# В репозитории всё хранится с переводом строки LF.
+* text=auto eol=lf
+
+# gradlew — shell-скрипт: с CRLF он не запустится ни на Linux, ни на macOS
+gradlew text eol=lf
+*.bat text eol=crlf
+
+*.jar binary
+*.png binary
+*.apk binary
+*.keystore binary
+*.jks binary

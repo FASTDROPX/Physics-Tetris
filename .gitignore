@@ -1,0 +1,20 @@
+.gradle/
+.kotlin/
+build/
+.idea/
+*.iml
+
+# Пути и пароли ключа подписи — ключ лежит вне проекта
+local.properties
+
+# Настройки Firebase конкретного проекта: в репозитории их нет,
+# образец — app/google-services.json.example
+app/google-services.json
+
+# Собранные пакеты раздаются через Releases, а не через репозиторий
+*.apk
+*.aab
+
+# Ключи подписи в репозитории не место — никогда
+*.jks
+*.keystore
