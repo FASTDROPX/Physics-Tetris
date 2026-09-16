@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.serafim.tetris.online.BoardRow
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
@@ -322,7 +323,20 @@ fun GameScreen(ctrl: Controller, frame: Int, keyboardAttached: Boolean) {
                 onJoin = { ctrl.joinBoard(it) },
                 onRetry = { ctrl.click(); ctrl.board.retry() },
                 onBack = { ctrl.closeBoard() },
+                onPlayer = { row, rank -> ctrl.openPlayer(row, rank) },
             )
+            // окно игрока — поверх таблицы, закрывается к ней же
+            val player = ctrl.board.player
+            if (player != null) {
+                PlayerSheet(
+                    large = maxWidth >= 900.dp && maxHeight >= 720.dp,
+                    view = player,
+                    today = java.time.LocalDate.now().toEpochDay(),
+                    animate = !game.reduceMotion,
+                    onRetry = { ctrl.click(); ctrl.board.player?.let { v -> ctrl.board.openPlayer(BoardRow(v.uid, v.name, 0L, v.me), v.rank) } },
+                    onBack = { ctrl.closePlayer() },
+                )
+            }
         }
         // «Заново» поверх сохранённой партии спрашивает подтверждение
         val save = ctrl.resume

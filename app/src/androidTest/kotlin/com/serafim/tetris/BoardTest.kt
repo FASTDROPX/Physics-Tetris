@@ -19,17 +19,23 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.serafim.tetris.online.BoardKind
 import com.serafim.tetris.online.BoardRow
 import com.serafim.tetris.online.BoardView
 import com.serafim.tetris.online.JoinIssue
 import com.serafim.tetris.online.Leaderboard
+import com.serafim.tetris.online.PlayerView
+import com.serafim.tetris.online.Profile
 import com.serafim.tetris.online.isDevNick
 import com.serafim.tetris.online.Standing
 import com.serafim.tetris.ui.BoardSheet
 import com.serafim.tetris.ui.M3
 import com.serafim.tetris.ui.TetrisTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -416,6 +422,59 @@ class BoardTest {
                     } finally {
                         runCatching { board.erase(sync = true) }
                         runCatching { board.releaseClaim("claude-rules") }
+                    }
+                }
+            }
+        } finally {
+            prefs.nick = oldNick
+        }
+    }
+
+    /**
+     * Профиль игрока через настоящую базу: записать вместе с очками, открыть
+     * себя так, как открывают чужого (с сервера, а не с телефона), увидеть
+     * все числа и серию — и стереть. Нужны опубликованные правила с блоком
+     * `profiles`: без них запись профиля отклоняется, и окно честно
+     * показывает только рекорд и сумму — тогда тест падает с понятной
+     * причиной.
+     */
+    @Test
+    fun профиль_игрока_через_firebase() {
+        val prefs = Prefs(context)
+        val oldNick = prefs.nick
+        prefs.nick = "claude-profile"
+        try {
+            runBlocking {
+                val board = Leaderboard(prefs, this)
+                withTimeout(90_000) {
+                    try {
+                        val p = Profile(
+                            xp = 123_456, pieces = 789, lines = 321, games = 12, timeMs = 3_600_000,
+                            streak = 5, streakBest = 9, streakDay = 20_000,
+                        )
+                        board.push(best = 4_321, total = 98_765, profile = p, sync = true)
+                        val me = checkNotNull(FirebaseAuth.getInstance().currentUser).uid
+                        // push профиль не ждёт; здесь та же запись ещё раз, но с
+                        // ожиданием — чтобы отказ базы пришёл в тест своими словами
+                        val write = runCatching {
+                            FirebaseFirestore.getInstance().collection(Leaderboard.PROFILES)
+                                .document(me).set(p.toMap()).await()
+                        }
+                        Log.i("BoardTest", "запись профиля: $write")
+                        write.exceptionOrNull()?.let {
+                            error("база не приняла профиль (опубликованы ли правила с блоком profiles?): ${it.message}")
+                        }
+                        board.openPlayer(BoardRow(me, "claude-profile", 0L, me = false), 1)
+                        while (board.player is PlayerView.Loading) delay(100)
+                        val got = board.player
+                        Log.i("BoardTest", "профиль: $got")
+                        val ready = got as? PlayerView.Ready ?: error("окно игрока не загрузилось: $got")
+                        assertEquals(4_321L, ready.best)
+                        assertEquals(98_765L, ready.total)
+                        assertEquals("профиль пришёл с сервера целиком", p, ready.profile)
+                    } finally {
+                        runCatching { board.erase(sync = true) }
+                        runCatching { board.releaseClaim("claude-profile") }
                     }
                 }
             }

@@ -1,10 +1,12 @@
 package com.serafim.tetris
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -22,6 +24,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
@@ -34,9 +37,11 @@ import com.serafim.tetris.game.FlameTier
 import com.serafim.tetris.game.STREAK_DAY_MS
 import com.serafim.tetris.game.StreakState
 import com.serafim.tetris.game.TetrisGame
+import com.serafim.tetris.ui.CALENDAR_WEEKS
 import com.serafim.tetris.ui.Flame
 import com.serafim.tetris.ui.M3
 import com.serafim.tetris.ui.StreakCard
+import com.serafim.tetris.ui.StreakCalendar
 import com.serafim.tetris.ui.StreakSheet
 import com.serafim.tetris.ui.StreakView
 import com.serafim.tetris.ui.TetrisTheme
@@ -170,6 +175,73 @@ class StreakTest {
         rule.onNodeWithText("Назад").performScrollTo()
         rule.mainClock.advanceTimeBy(500)
         save("94_streak_sheet_bottom")
+    }
+
+    /**
+     * Клетки календаря встают волной: диагональ за диагональю слева сверху
+     * направо вниз, а внутри диагонали — по очереди снизу вверх. Проверяется
+     * по самим кадрам: для каждой клетки ловится момент, когда она
+     * проступила, и порядок этих моментов сверяется с задуманным.
+     */
+    @Test
+    fun клетки_календаря_встают_волной() {
+        // все дни сыграны долго — все клетки яркие, и их появление видно по пикселю
+        val v = StreakView(
+            days = 42, best = 42, state = StreakState.LIT, totalDays = 42,
+            history = List(42) { 20 * STREAK_DAY_MS }, weekday = 7, longestDayMs = 20 * STREAK_DAY_MS,
+        )
+        // календарь отдельно от окна: окно въезжает снизу, и пока оно едет,
+        // точки замера смещались бы вместе с ним
+        screen { Box(Modifier.padding(top = 40.dp).fillMaxWidth(), contentAlignment = Alignment.TopCenter) { StreakCalendar(v, large = false, animate = true) } }
+        rule.mainClock.advanceTimeBy(16)
+        val centers = HashMap<Pair<Int, Int>, Pair<Int, Int>>()
+        for (w in 0 until CALENDAR_WEEKS) for (d in 0 until 7) {
+            val b = rule.onNodeWithTag("cal-$w-$d").fetchSemanticsNode().boundsInRoot
+            centers[w to d] = b.center.x.toInt() to b.center.y.toInt()
+        }
+        val base = rule.mainClock.currentTime
+        val seen = HashMap<Pair<Int, Int>, Long>()
+        val shots = mutableListOf(560L, 760L, 960L)
+        while (rule.mainClock.currentTime - base < 2200 && seen.size < centers.size) {
+            val ms = rule.mainClock.currentTime - base
+            val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
+            for ((cell, c) in centers) {
+                if (cell in seen) continue
+                val px = bmp.getPixel(c.first, c.second)
+                // яркая жёлтая клетка: красный канал проступает выше половины
+                if ((px shr 16 and 0xFF) > 150) seen[cell] = ms
+            }
+            if (shots.isNotEmpty() && ms >= shots.first()) {
+                val dir = File(context.filesDir, "shots").apply { mkdirs() }
+                FileOutputStream(File(dir, "95_cascade_%04d.png".format(shots.removeAt(0)))).use {
+                    bmp.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+            rule.mainClock.advanceTimeBy(16)
+        }
+        Log.i("StreakTest", "клеток проступило ${seen.size} из ${centers.size}; не проступили: " +
+            centers.keys.filter { it !in seen }.sortedBy { it.first * 10 + it.second } + " центры: " + centers[0 to 0] + " " + centers[5 to 6])
+        assertEquals("все клетки проступили", centers.size, seen.size)
+
+        val diagonals = (0..CALENDAR_WEEKS - 1 + 6).map { d ->
+            // снизу вверх: от большей строки к меньшей
+            (CALENDAR_WEEKS - 1 downTo 0).mapNotNull { w -> val c = d - w; if (c in 0..6) w to c else null }
+        }
+        for ((d, cells) in diagonals.withIndex()) {
+            val times = cells.map { seen.getValue(it) }
+            Log.i("StreakTest", "диагональ $d снизу вверх: $times")
+            for (i in 1 until times.size) {
+                assertTrue("диагональ $d: клетка выше не раньше нижней $times", times[i] >= times[i - 1])
+            }
+            if (cells.size >= 3) {
+                assertTrue("диагональ $d встаёт не разом, а по очереди: $times", times.last() > times.first())
+            }
+        }
+        for (d in 1 until diagonals.size) {
+            val prev = seen.getValue(diagonals[d - 1].first())
+            val cur = seen.getValue(diagonals[d].first())
+            assertTrue("диагональ $d начинается позже диагонали ${d - 1}", cur > prev)
+        }
     }
 
     @Test

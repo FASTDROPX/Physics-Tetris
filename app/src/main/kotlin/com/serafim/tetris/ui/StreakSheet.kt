@@ -1,5 +1,6 @@
 package com.serafim.tetris.ui
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -41,7 +43,9 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -360,7 +364,7 @@ private fun HeatCell(color: Color, side: Dp, today: Boolean, radius: Dp = side /
 // ---------- окно серии ----------
 
 /** Сколько недель показывает календарь; истории в памяти хватает на шесть. */
-private const val CALENDAR_WEEKS = 6
+const val CALENDAR_WEEKS = 6
 
 /**
  * Окно серии: большой огонёк, числа, календарь последних недель и лесенка
@@ -406,7 +410,7 @@ fun StreakSheet(closing: Boolean, large: Boolean, view: StreakView, animate: Boo
                     }
                 }
             }
-            RiseIn(t, 210f) { Calendar(view, large) }
+            RiseIn(t, 210f) { StreakCalendar(view, large, animate) }
             RiseIn(t, 260f) { Ladder(view, large, animate) }
             RiseIn(t, 310f) {
                 Button(
@@ -436,15 +440,45 @@ private fun Tile(label: String, value: String, modifier: Modifier) {
 private val WeekdayNames = listOf("пн", "вт", "ср", "чт", "пт", "сб", "вс")
 
 /**
+ * Когда появляется клетка календаря. Волна идёт по диагоналям слева сверху
+ * направо вниз ([DIAG_STEP] на диагональ), но диагональ не вспыхивает
+ * целиком: её клетки встают по очереди снизу вверх, с малым шагом
+ * [CELL_STEP] — от левой нижней к правой верхней.
+ *
+ * Диагональ — это клетки с одной суммой строки и столбца; нижняя из них
+ * лежит в строке min(d, последняя), с неё и начинается отсчёт.
+ */
+fun calendarDelay(week: Int, dow: Int, weeks: Int = CALENDAR_WEEKS): Int {
+    val d = week + dow
+    val bottom = minOf(d, weeks - 1)
+    return CASCADE_LEAD + d * DIAG_STEP + (bottom - week) * CELL_STEP
+}
+
+/** Окно успевает въехать, прежде чем пойдёт волна. */
+private const val CASCADE_LEAD = 280
+private const val DIAG_STEP = 60
+private const val CELL_STEP = 24
+private const val CELL_IN_MS = 420
+
+/**
  * Календарь последних недель, как у GitHub: строка — неделя с понедельника,
  * клетка — день, яркость — сколько в тот день игралось. Дни после
  * сегодняшнего в текущей неделе не рисуются.
+ *
+ * Клетки проступают волной ([calendarDelay]): каждая из прозрачности и из
+ * половины своего размера по кривой expo. Все клетки идут от одних часов —
+ * сорок две отдельные анимации для этого не нужны.
  */
 @Composable
-private fun Calendar(view: StreakView, large: Boolean) {
+internal fun StreakCalendar(view: StreakView, large: Boolean, animate: Boolean) {
     val tier = view.tier
     val cell = if (large) 28.dp else 20.dp
     val gap = if (large) 6.dp else 4.dp
+    val end = calendarDelay(CALENDAR_WEEKS - 1, 6) + CELL_IN_MS
+    val clock = remember { Animatable(if (animate) 0f else end.toFloat()) }
+    LaunchedEffect(Unit) {
+        if (animate) clock.animateTo(end.toFloat(), tween(end, easing = LinearEasing))
+    }
     // сегодня — последний элемент истории; его место в сетке — по дню недели
     val todayIndex = (CALENDAR_WEEKS - 1) * 7 + (view.weekday - 1)
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -474,7 +508,20 @@ private fun Calendar(view: StreakView, large: Boolean) {
                     if (back < 0) {
                         Spacer(Modifier.size(cell))
                     } else {
-                        HeatCell(cellColor(tier, ms ?: 0L, index, levels = 3), cell, today = back == 0, radius = 5.dp)
+                        val start = calendarDelay(week, dow)
+                        Box(
+                            Modifier
+                                .testTag("cal-$week-$dow")
+                                .graphicsLayer {
+                                    val k = Expo.transform(((clock.value - start) / CELL_IN_MS).coerceIn(0f, 1f))
+                                    alpha = k
+                                    val sc = 0.5f + 0.5f * k
+                                    scaleX = sc
+                                    scaleY = sc
+                                },
+                        ) {
+                            HeatCell(cellColor(tier, ms ?: 0L, index, levels = 3), cell, today = back == 0, radius = 5.dp)
+                        }
                     }
                 }
             }

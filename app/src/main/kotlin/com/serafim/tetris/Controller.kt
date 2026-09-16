@@ -13,7 +13,10 @@ import com.serafim.tetris.game.Streak
 import com.serafim.tetris.game.pluralRu
 import com.serafim.tetris.game.peekSave
 import com.serafim.tetris.game.TetrisGame
+import com.serafim.tetris.online.BoardRow
 import com.serafim.tetris.online.Leaderboard
+import com.serafim.tetris.online.PlayerView
+import com.serafim.tetris.online.Profile
 import com.serafim.tetris.ui.StreakView
 import com.serafim.tetris.ui.ThemeKind
 import kotlinx.coroutines.CoroutineScope
@@ -243,7 +246,31 @@ class Controller(
 
     fun closeBoard() { click(); showBoard = false }
 
-    fun joinBoard(nick: String) { click(); board.join(nick, game.best, game.stats.score) }
+    fun joinBoard(nick: String) { click(); board.join(nick, game.best, game.stats.score, profile()) }
+
+    /**
+     * Профиль игрока для таблицы: всё, что показывает окно статистики, и
+     * серия. Уходит вместе с очками — и только у тех, кто выбрал ник.
+     */
+    fun profile(): Profile = Profile(
+        xp = game.xpTotal,
+        pieces = game.stats.pieces,
+        lines = game.stats.lines,
+        games = game.stats.games,
+        timeMs = game.stats.timeMs.toLong(),
+        streak = streak.current,
+        streakBest = streak.best,
+        streakDay = if (streak.lastDay == Streak.NEVER) -1L else streak.lastDay,
+    )
+
+    /** Тап по строке таблицы. Себя — сразу из телефона, других — с сервера. */
+    fun openPlayer(row: BoardRow, rank: Int) {
+        click()
+        val mine = PlayerView.Ready(row.uid, row.name, rank, true, game.best, game.stats.score, profile())
+        board.openPlayer(row, rank, mine)
+    }
+
+    fun closePlayer() { click(); board.closePlayer() }
 
     fun closeStats() { click(); showStats = false; showResetConfirm = false }
 
@@ -284,6 +311,7 @@ class Controller(
         if (showSettings) { closeSettings(); return true }
         if (showStreak) { closeStreak(); return true }
         if (showStats) { closeStats(); return true }
+        if (board.player != null) { closePlayer(); return true }
         if (showBoard) { closeBoard(); return true }
         return false
     }
@@ -300,7 +328,7 @@ class Controller(
         }
         if (state == GameState.OVER && lastState != GameState.OVER) {
             saveProgress()
-            board.submit(game.best, game.stats.score)
+            board.submit(game.best, game.stats.score, profile())
             dropGame()
         }
         // партия пишется на диск с каждой лёгшей фигурой
@@ -416,7 +444,7 @@ class Controller(
         game.backToMenu()
         refreshMenu()
         saveProgress()
-        board.submit(game.best, game.stats.score)
+        board.submit(game.best, game.stats.score, profile())
     }
 
 

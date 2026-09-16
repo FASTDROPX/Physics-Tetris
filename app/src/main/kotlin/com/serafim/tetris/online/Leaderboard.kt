@@ -138,12 +138,17 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
     var issue by mutableStateOf<JoinIssue?>(null)
         private set
 
+    /** Окно игрока поверх таблицы: кого открыли и что о нём известно. */
+    var player by mutableStateOf<PlayerView?>(null)
+        private set
+
     private var standingFor = -1L
     private var standingAt = 0L
 
     private val auth get() = FirebaseAuth.getInstance()
     private val col get() = FirebaseFirestore.getInstance().collection(COLLECTION)
     private val nicks get() = FirebaseFirestore.getInstance().collection(NICKS)
+    private val profiles get() = FirebaseFirestore.getInstance().collection(PROFILES)
 
     /** Ключ ника, бронь которого уже пытались поставить за этот запуск. */
     private var claimed = ""
@@ -170,7 +175,7 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
      * не пройдёт, — и только потом уходят числа. Пока идёт проверка, форма
      * ждёт: [joining]. Отказ виден в [issue], и ник на телефоне не меняется.
      */
-    fun join(raw: String, best: Long, total: Long) {
+    fun join(raw: String, best: Long, total: Long, profile: Profile? = null) {
         val clean = Nick.clean(raw)
         if (!Nick.isValid(clean) || joining) return
         joining = true
@@ -187,7 +192,7 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
             prefs.nick = clean
             // ждём, пока запись дойдёт до сервера, — иначе свежий список
             // ещё не увидит игрока; без сети ждём недолго
-            val ok = runCatching { push(best, total, sync = true) }
+            val ok = runCatching { push(best, total, profile, sync = true) }
             joining = false
             if (ok.isFailure) {
                 view = BoardView.Failed(explain(ok.exceptionOrNull()!!))
@@ -201,9 +206,50 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
     // ---------- из игры ----------
 
     /** Конец партии: свежие рекорд и сумма. Без ника — ничего. */
-    fun submit(best: Long, total: Long) {
+    fun submit(best: Long, total: Long, profile: Profile? = null) {
         if (!joined) return
-        scope.launch { runCatching { push(best, total) } }
+        scope.launch { runCatching { push(best, total, profile) } }
+    }
+
+    // ---------- окно игрока ----------
+
+    /**
+     * Открыть игрока из таблицы. Себя показываем сразу из того, что лежит на
+     * телефоне ([mine]): оно свежее сервера. Чужого — читаем две записи:
+     * строку таблицы (рекорд и сумма) и профиль. Профиля может не быть —
+     * игрок не обновил игру или правила базы ещё старые, — тогда окно
+     * покажет, что есть, а не ошибку.
+     */
+    fun openPlayer(row: BoardRow, rank: Int, mine: PlayerView.Ready? = null) {
+        if (row.me && mine != null) {
+            player = mine.copy(rank = rank)
+            return
+        }
+        player = PlayerView.Loading(row.uid, row.name, rank, row.me)
+        scope.launch {
+            val r = runCatching { fetchPlayer(row.uid) }
+            // пока грузилось, окно закрыли или открыли другого
+            if (player?.uid != row.uid) return@launch
+            player = r.fold(
+                onSuccess = { (best, total, profile) ->
+                    PlayerView.Ready(row.uid, row.name, rank, row.me, best, total, profile)
+                },
+                onFailure = { PlayerView.Failed(row.uid, row.name, rank, row.me, explain(it), offline(it)) },
+            )
+        }
+    }
+
+    fun closePlayer() {
+        player = null
+    }
+
+    private suspend fun fetchPlayer(uid: String): Triple<Long, Long, Profile?> {
+        uid()
+        val row = col.document(uid).get(Source.SERVER).await()
+        // профиль необязателен: нет записи или правила его ещё не пускают —
+        // это не ошибка окна, а просто меньше подробностей
+        val profile = runCatching { Profile.from(profiles.document(uid).get(Source.SERVER).await()) }.getOrNull()
+        return Triple(row.getLong("best") ?: 0L, row.getLong("total") ?: 0L, profile)
     }
 
     /** Сброс статистики: строка игрока уходит из таблицы. Ник остаётся. */
@@ -401,7 +447,7 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
      * ждём подтверждения сервера, но не дольше [SYNC_MS]: отказ правил
      * тогда всплывает ошибкой, а отсутствие сети — нет.
      */
-    suspend fun push(best: Long, total: Long, sync: Boolean = false) {
+    suspend fun push(best: Long, total: Long, profile: Profile? = null, sync: Boolean = false) {
         val me = uid()
         cache.clear()
         // те, кто взял ник до появления брони, закрепляют его здесь
@@ -414,12 +460,16 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
                 "updated" to FieldValue.serverTimestamp(),
             ),
         )
+        // профиль — отдельной записью и без ожидания: его отказ (старые
+        // правила базы) не должен касаться строки таблицы
+        if (profile != null) profiles.document(me).set(profile.toMap())
         if (sync) withTimeoutOrNull(SYNC_MS) { task.await() }
     }
 
     suspend fun erase(sync: Boolean = false) {
         val me = auth.currentUser?.uid ?: return          // не входил — нечего стирать
         val task = col.document(me).delete()
+        profiles.document(me).delete()
         if (sync) withTimeoutOrNull(SYNC_MS) { task.await() }
     }
 
@@ -457,6 +507,9 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
 
         /** Занятые ники: ключ документа — ник маленькими буквами. */
         const val NICKS = "nicks"
+
+        /** Подробная статистика игроков: ключ — тот же uid, что и в таблице. */
+        const val PROFILES = "profiles"
         const val TOP = 50
 
         /** Сколько строк таблицы просматривается в поисках тех же букв. */

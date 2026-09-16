@@ -672,7 +672,7 @@ fun RestartSheet(large: Boolean, save: SaveHead, onCancel: () -> Unit, onConfirm
 }
 
 @Composable
-private fun StatRow(label: String, value: String, large: Boolean) {
+internal fun StatRow(label: String, value: String, large: Boolean) {
     Row(
         Modifier
             .fillMaxWidth()

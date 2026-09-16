@@ -72,6 +72,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.serafim.tetris.game.Nick
@@ -135,18 +136,27 @@ private const val RAINBOW_MS = 2600f
  * её не подобрать.
  */
 @Composable
-private fun RowScope.NickText(name: String, color: Color, weight: Float = 1f) {
+internal fun RowScope.NickText(
+    name: String,
+    color: Color,
+    weight: Float = 1f,
+    fontSize: TextUnit = 15.sp,
+    // в строке таблицы ник занимает всё свободное место, в заголовке окна
+    // игрока — только своё, чтобы встать по центру
+    fill: Boolean = true,
+    badge: Dp = 20.dp,
+) {
     Row(
-        Modifier.weight(weight),
+        if (fill) Modifier.weight(weight) else Modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (isFriendNick(name)) PieceBadge(20.dp)
+        if (isFriendNick(name)) PieceBadge(badge)
         val dev = isDevNick(name)
         Text(
             name,
             color = if (dev) Color.Unspecified else color,
-            fontSize = 15.sp,
+            fontSize = fontSize,
             fontWeight = if (dev) FontWeight.Medium else FontWeight.Normal,
             style = if (dev) LocalTextStyle.current.merge(TextStyle(brush = rainbowBrush())) else LocalTextStyle.current,
             maxLines = 1,
@@ -258,6 +268,7 @@ fun BoardSheet(
     onJoin: (String) -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onPlayer: (BoardRow, Int) -> Unit = { _, _ -> },
 ) {
     var editing by remember { mutableStateOf(nick.isEmpty()) }
     var draft by remember { mutableStateOf(nick) }
@@ -327,7 +338,7 @@ fun BoardSheet(
                                 }
                             }
                         }
-                    is BoardView.Ready -> Rows(view, gen, onRetry)
+                    is BoardView.Ready -> Rows(view, gen, onRetry, onPlayer)
                 }
             }
             RiseIn(t, 260f) {
@@ -485,7 +496,7 @@ private fun MeLine(nick: String, view: BoardView, onRename: () -> Unit) {
 }
 
 @Composable
-private fun Rows(view: BoardView.Ready, gen: Any, onRetry: () -> Unit) {
+private fun Rows(view: BoardView.Ready, gen: Any, onRetry: () -> Unit, onPlayer: (BoardRow, Int) -> Unit) {
     if (view.rows.isEmpty()) {
         if (view.stale) {
             OfflineNote(view.syncedAt, onRetry, divider = false)
@@ -512,7 +523,7 @@ private fun Rows(view: BoardView.Ready, gen: Any, onRetry: () -> Unit) {
             itemsIndexed(view.rows, key = { _, r -> r.uid }) { i, r ->
                 val fresh = remember(gen, r.uid) { seen.add(r.uid) }
                 val wait = if (settled) 0 else ROW_LEAD + i * ROW_STEP
-                Line(i + 1, r, gen, animate = fresh, wait = wait)
+                Line(i + 1, r, gen, animate = fresh, wait = wait, onClick = { onPlayer(r, i + 1) })
             }
         }
     }
@@ -619,7 +630,7 @@ private const val ROW_STEP = 45
  * той же кривой expo, что и счёт в игре.
  */
 @Composable
-private fun Line(rank: Int, row: BoardRow, gen: Any, animate: Boolean, wait: Int) {
+private fun Line(rank: Int, row: BoardRow, gen: Any, animate: Boolean, wait: Int, onClick: () -> Unit) {
     val slide = remember(gen) { Animatable(if (animate) 0f else 1f) }
     val count = remember(gen) { Animatable(if (animate) 0f else 1f) }
     LaunchedEffect(gen) {
@@ -653,6 +664,8 @@ private fun Line(rank: Int, row: BoardRow, gen: Any, animate: Boolean, wait: Int
             }
             .clip(RoundedCornerShape(12.dp))
             .background(if (row.me) M3.SecondaryContainer else M3.SurfaceContainer)
+            // тап по строке открывает окно игрока с его статистикой
+            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
