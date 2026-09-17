@@ -133,6 +133,7 @@ class Controller(
         creditedPlayMs = game.stats.timeMs
         refreshStreak()
         board.refreshStanding(game.stats.score)
+        shareProfile()
         resume = prefs.readResume()?.let { peekSave(it) }
         lastPieces = game.stats.pieces
     }
@@ -263,6 +264,16 @@ class Controller(
         streakDay = if (streak.lastDay == Streak.NEVER) -1L else streak.lastDay,
     )
 
+    /**
+     * Профиль — в базу при запуске и при каждом заходе в меню, а не только
+     * с очками в конце партии: так он доходит, как только правила базы его
+     * пускают. Без очков не шлём — после сброса статистики строки в таблице
+     * нет, и профилю без неё показываться негде.
+     */
+    private fun shareProfile() {
+        if (game.stats.score > 0L) board.shareProfile(profile())
+    }
+
     /** Тап по строке таблицы. Себя — сразу из телефона, других — с сервера. */
     fun openPlayer(row: BoardRow, rank: Int) {
         click()
@@ -325,6 +336,7 @@ class Controller(
             refreshStreak()
             // в меню заходят после каждой партии — там и обновляем место
             board.refreshStanding(game.stats.score)
+            shareProfile()
         }
         if (state == GameState.OVER && lastState != GameState.OVER) {
             saveProgress()

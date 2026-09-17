@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
             // стоит обращение к системным цветам, и делать его каждый кадр незачем
             val context = LocalContext.current
             val palette = remember(ctrl.theme) { paletteOf(ctrl.theme, context) }
-            TetrisTheme(palette) { App(ctrl) }
+            // при системном запрете анимаций тема меняется сразу
+            TetrisTheme(palette, smooth = !game.reduceMotion) { App(ctrl) }
         }
     }
 

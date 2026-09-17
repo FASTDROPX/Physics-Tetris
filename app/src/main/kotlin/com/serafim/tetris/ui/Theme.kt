@@ -6,11 +6,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -155,6 +160,24 @@ object M3 {
     val Danger = Color(0xFFD32F2F)
     val OnDanger = Color(0xFFFFFFFF)
 
+    /** Цвета, которые стоят сейчас, — в том числе посреди перехода между темами. */
+    fun palette() = Palette(
+        surface = Surface,
+        surfaceContainer = SurfaceContainer,
+        surfaceContainerHigh = SurfaceContainerHigh,
+        surfaceContainerHighest = SurfaceContainerHighest,
+        surfaceDim = SurfaceDim,
+        primary = Primary,
+        onPrimary = OnPrimary,
+        secondaryContainer = SecondaryContainer,
+        onSecondaryContainer = OnSecondaryContainer,
+        onSurface = OnSurface,
+        onSurfaceVariant = OnSurfaceVariant,
+        outline = Outline,
+        outlineVariant = OutlineVariant,
+        empty = Empty,
+    )
+
     fun apply(p: Palette) {
         Surface = p.surface
         SurfaceContainer = p.surfaceContainer
@@ -172,6 +195,31 @@ object M3 {
         Empty = p.empty
     }
 }
+
+/**
+ * Палитра на доле [f] пути от [a] к [b]. Цвета смешиваются в Oklab — так
+ * устроен `lerp` у Compose, — поэтому посреди перехода нет серой ямы, как
+ * у смешивания по каналам RGB.
+ */
+fun lerp(a: Palette, b: Palette, f: Float) = Palette(
+    surface = lerp(a.surface, b.surface, f),
+    surfaceContainer = lerp(a.surfaceContainer, b.surfaceContainer, f),
+    surfaceContainerHigh = lerp(a.surfaceContainerHigh, b.surfaceContainerHigh, f),
+    surfaceContainerHighest = lerp(a.surfaceContainerHighest, b.surfaceContainerHighest, f),
+    surfaceDim = lerp(a.surfaceDim, b.surfaceDim, f),
+    primary = lerp(a.primary, b.primary, f),
+    onPrimary = lerp(a.onPrimary, b.onPrimary, f),
+    secondaryContainer = lerp(a.secondaryContainer, b.secondaryContainer, f),
+    onSecondaryContainer = lerp(a.onSecondaryContainer, b.onSecondaryContainer, f),
+    onSurface = lerp(a.onSurface, b.onSurface, f),
+    onSurfaceVariant = lerp(a.onSurfaceVariant, b.onSurfaceVariant, f),
+    outline = lerp(a.outline, b.outline, f),
+    outlineVariant = lerp(a.outlineVariant, b.outlineVariant, f),
+    empty = lerp(a.empty, b.empty, f),
+)
+
+/** Сколько длится переход от одной темы к другой. */
+const val THEME_MS = 450
 
 /** Те же две кривые, что и в CSS: --expo и --emphasized. */
 val Expo = CubicBezierEasing(0.19f, 1f, 0.22f, 1f)
@@ -214,12 +262,32 @@ private fun schemeOf(p: Palette) = darkColorScheme(
 )
 
 /**
- * Тема игры. [palette] подставляется в [M3] до того, как что-либо
- * нарисуется, поэтому смена темы доходит и до тех мест, которые берут
- * цвета не из MaterialTheme, а прямо из [M3] — а это почти вся отрисовка.
+ * Тема игры. Цвета берутся не из MaterialTheme, а прямо из [M3] — это почти
+ * вся отрисовка, — поэтому тема живёт в [M3].
+ *
+ * При первом показе [palette] ставится сразу, до того как что-либо
+ * нарисуется: переливаться ещё не из чего. Смена темы потом перетекает за
+ * [THEME_MS]: каждый кадр в [M3] кладётся промежуточная палитра, и
+ * перерисовывается только то, что эти цвета читает. Смена посреди перехода
+ * начинает новый от тех цветов, что на экране, — без скачка назад.
+ * [smooth] = false — системный запрет анимаций: тема меняется сразу.
+ *
+ * Схема MaterialTheme переключается сразу: из неё берутся только цвета по
+ * умолчанию, а всё видимое красится из [M3] явно. Анимировать и её значило
+ * бы перестраивать весь экран каждый кадр — она раздаётся статически.
  */
 @Composable
-fun TetrisTheme(palette: Palette = DarkPalette, content: @Composable () -> Unit) {
-    M3.apply(palette)
+fun TetrisTheme(palette: Palette = DarkPalette, smooth: Boolean = true, content: @Composable () -> Unit) {
+    remember { M3.apply(palette) }
+    LaunchedEffect(palette) {
+        val from = M3.palette()
+        if (from == palette) return@LaunchedEffect
+        if (smooth) {
+            animate(0f, 1f, animationSpec = tween(THEME_MS, easing = Emphasized)) { f, _ ->
+                M3.apply(lerp(from, palette, f))
+            }
+        }
+        M3.apply(palette)
+    }
     MaterialTheme(colorScheme = schemeOf(palette), typography = Type, content = content)
 }

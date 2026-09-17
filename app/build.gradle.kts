@@ -59,7 +59,7 @@ android {
         // Дата в формате ггДДДЧЧмм растёт сама и укладывается в предел
         // Google Play (меньше 2 100 000 000).
         versionCode = buildStamp
-        versionName = "3.7"
+        versionName = "3.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

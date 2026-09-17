@@ -454,15 +454,22 @@ class BoardTest {
                         )
                         board.push(best = 4_321, total = 98_765, profile = p, sync = true)
                         val me = checkNotNull(FirebaseAuth.getInstance().currentUser).uid
+                        val doc = FirebaseFirestore.getInstance().collection(Leaderboard.PROFILES).document(me)
+                        // Сначала чтение. Без блока profiles в правилах его режет
+                        // общий запрет — тогда правила просто не опубликованы. С
+                        // блоком чтение проходит, и отказ в записи значит уже
+                        // другое: правила опубликованы, но не пускают эту запись.
+                        val read = runCatching { doc.get(com.google.firebase.firestore.Source.SERVER).await() }
+                        Log.i("BoardTest", "чтение профиля: ${read.exceptionOrNull() ?: "пускает"}")
+                        read.exceptionOrNull()?.let {
+                            error("правила с блоком profiles не опубликованы — база не даёт даже читать: ${it.message}")
+                        }
                         // push профиль не ждёт; здесь та же запись ещё раз, но с
                         // ожиданием — чтобы отказ базы пришёл в тест своими словами
-                        val write = runCatching {
-                            FirebaseFirestore.getInstance().collection(Leaderboard.PROFILES)
-                                .document(me).set(p.toMap()).await()
-                        }
+                        val write = runCatching { doc.set(p.toMap()).await() }
                         Log.i("BoardTest", "запись профиля: $write")
                         write.exceptionOrNull()?.let {
-                            error("база не приняла профиль (опубликованы ли правила с блоком profiles?): ${it.message}")
+                            error("правила опубликованы, но не пускают профиль ${p.toMap()}: ${it.message}")
                         }
                         board.openPlayer(BoardRow(me, "claude-profile", 0L, me = false), 1)
                         while (board.player is PlayerView.Loading) delay(100)

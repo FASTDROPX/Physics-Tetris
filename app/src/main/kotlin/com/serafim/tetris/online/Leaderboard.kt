@@ -1,5 +1,6 @@
 package com.serafim.tetris.online
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -462,14 +463,47 @@ class Leaderboard(private val prefs: Prefs, private val scope: CoroutineScope) {
         )
         // профиль — отдельной записью и без ожидания: его отказ (старые
         // правила базы) не должен касаться строки таблицы
-        if (profile != null) profiles.document(me).set(profile.toMap())
+        if (profile != null) sendProfile(me, profile)
         if (sync) withTimeoutOrNull(SYNC_MS) { task.await() }
+    }
+
+    /** Профиль, который база точно приняла, и тот, что сейчас в пути. */
+    private var profileSent: Profile? = null
+    private var profileSending: Profile? = null
+
+    /**
+     * Отправить профиль без очков — при запуске игры и при каждом заходе в
+     * меню. Раньше он уходил только вместе с очками, в конце партии, и
+     * пока правила базы не пускали профили, все такие записи пропадали:
+     * отказ в записи Firestore не повторяет. Теперь профиль досылается при
+     * следующем же открытии игры — достаточно запустить её после того, как
+     * правила опубликованы, доигрывать партию не нужно.
+     *
+     * Одно и то же дважды не пишется: принятый базой профиль запоминается,
+     * а отказ (правила ещё старые, нет сети) оставляет попытку на следующий
+     * раз.
+     */
+    fun shareProfile(profile: Profile) {
+        if (!joined) return
+        scope.launch { runCatching { sendProfile(uid(), profile) } }
+    }
+
+    private fun sendProfile(me: String, profile: Profile) {
+        if (profile == profileSent || profile == profileSending) return
+        profileSending = profile
+        scope.launch {
+            runCatching { profiles.document(me).set(profile.toMap()).await() }
+                .onSuccess { profileSent = profile }
+                .onFailure { Log.w("Leaderboard", "профиль не принят: ${it.message}") }
+            if (profileSending == profile) profileSending = null
+        }
     }
 
     suspend fun erase(sync: Boolean = false) {
         val me = auth.currentUser?.uid ?: return          // не входил — нечего стирать
         val task = col.document(me).delete()
         profiles.document(me).delete()
+        profileSent = null
         if (sync) withTimeoutOrNull(SYNC_MS) { task.await() }
     }
 

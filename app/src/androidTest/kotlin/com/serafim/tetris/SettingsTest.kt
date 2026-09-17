@@ -37,7 +37,14 @@ import com.serafim.tetris.game.C
 import com.serafim.tetris.game.Piece
 import com.serafim.tetris.game.PieceType
 import com.serafim.tetris.game.TetrisGame
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
 import com.serafim.tetris.ui.AmoledPalette
+import com.serafim.tetris.ui.BoardButton
+import com.serafim.tetris.ui.SettingsButton
+import com.serafim.tetris.ui.StatsButton
+import com.serafim.tetris.ui.THEME_MS
 import com.serafim.tetris.ui.DarkPalette
 import com.serafim.tetris.ui.GameScreen
 import com.serafim.tetris.ui.M3
@@ -93,13 +100,113 @@ class SettingsTest {
         val dark = rule.onRoot().captureToImage().asAndroidBitmap().corner()
 
         amoled = true
-        rule.mainClock.advanceTimeBy(500)
+        // переход длится THEME_MS — ждём его с запасом
+        rule.mainClock.advanceTimeBy(THEME_MS + 500L)
         val black = rule.onRoot().captureToImage().asAndroidBitmap().corner()
 
         Log.i("SettingsTest", "тёмная=${Integer.toHexString(dark)} amoled=${Integer.toHexString(black)}")
         assertEquals("тёмная тема — цвет оригинала", 0xFF131619.toInt(), dark)
         assertEquals("AMOLED — чистый чёрный", 0xFF000000.toInt(), black)
         assertNotEquals("смена темы дошла до отрисовки", dark, black)
+    }
+
+    /**
+     * Тема перетекает, а не щёлкает: красный канал фона кадр за кадром идёт
+     * от тёмного к белому через промежуточные значения, ни разу не
+     * откатываясь. Смена посреди перехода продолжает от того цвета, что на
+     * экране, а без анимаций тема встаёт сразу.
+     */
+    @Test
+    fun тема_перетекает_плавно() {
+        val white = DarkPalette.copy(surface = androidx.compose.ui.graphics.Color.White)
+        var light by mutableStateOf(false)
+        var smooth by mutableStateOf(true)
+        rule.mainClock.autoAdvance = false
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(2f, 1f)) {
+                TetrisTheme(if (light) white else DarkPalette, smooth = smooth) {
+                    Box(Modifier.requiredSize(120.dp, 120.dp).background(M3.Surface))
+                }
+            }
+        }
+        fun red() = android.graphics.Color.red(rule.onRoot().captureToImage().asAndroidBitmap().corner())
+        rule.mainClock.advanceTimeBy(300)
+        assertEquals("при запуске тема стоит сразу", 0x13, red())
+
+        light = true
+        val reds = ArrayList<Int>()
+        repeat(40) {
+            rule.mainClock.advanceTimeBy(16)
+            reds += red()
+        }
+        Log.i("SettingsTest", "переход: $reds")
+        assertEquals("переход закончился на белом", 255, reds.last())
+        for (i in 1 until reds.size) {
+            assertTrue("цвет не откатывается назад: $reds", reds[i] >= reds[i - 1])
+        }
+        val middle = reds.filter { it in 40..230 }.distinct()
+        assertTrue("по пути есть промежуточные цвета, а не щелчок: $reds", middle.size >= 4)
+        // половина пути — не в первом кадре и не в последнем
+        val half = reds.indexOfFirst { it >= 137 }
+        assertTrue("середина перехода не в первом кадре: $reds", half >= 1)
+
+        // обратно, но посреди перехода — снова к тёмному
+        light = false
+        rule.mainClock.advanceTimeBy(96)
+        val before = red()
+        light = true
+        rule.mainClock.advanceTimeBy(16)
+        val after = red()
+        Log.i("SettingsTest", "разворот: $before → $after")
+        assertTrue("смена посреди перехода не прыгает: $before → $after", before in 40..230 && kotlin.math.abs(after - before) < 60)
+
+        // без анимаций тема встаёт сразу
+        rule.mainClock.advanceTimeBy(THEME_MS + 300L)
+        smooth = false
+        rule.mainClock.advanceTimeBy(16)
+        light = false
+        rule.mainClock.advanceTimeBy(32)
+        assertEquals("без анимаций — сразу", 0x13, red())
+    }
+
+    /**
+     * Шестерёнка ростом с соседей по углу меню. Меряется настоящий рисунок:
+     * в каждой кнопке — рамка из точек, закрашенных линией больше чем
+     * наполовину. Прежняя шестерёнка была выше столбиков на треть.
+     */
+    @Test
+    fun шестерёнка_ростом_с_соседей() {
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(2f, 1f)) {
+                TetrisTheme {
+                    androidx.compose.foundation.layout.Row(Modifier.background(M3.Surface)) {
+                        Box(Modifier.testTag("cup")) { BoardButton {} }
+                        Box(Modifier.testTag("gear")) { SettingsButton {} }
+                        Box(Modifier.testTag("bars")) { StatsButton {} }
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+        save("99_icons", rule.onRoot().captureToImage().asAndroidBitmap())
+        fun ink(tag: String): android.graphics.Rect {
+            val bmp = rule.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+            val bg = android.graphics.Color.red(bmp.getPixel(1, 1))
+            val fg = android.graphics.Color.red(M3.OnSurfaceVariant.toArgb())
+            val r = android.graphics.Rect(bmp.width, bmp.height, -1, -1)
+            for (y in 0 until bmp.height) for (x in 0 until bmp.width) {
+                if (android.graphics.Color.red(bmp.getPixel(x, y)) > (bg + fg) / 2) r.union(x, y)
+            }
+            return r
+        }
+        val cup = ink("cup")
+        val gear = ink("gear")
+        val bars = ink("bars")
+        Log.i("SettingsTest", "рамки: кубок $cup, шестерёнка $gear, столбики $bars")
+        // деление сетки на этой плотности — 22 dp × 2 / 24 ≈ 1,8 точки
+        assertTrue("шестерёнка не выше кубка больше чем на деление: $gear vs $cup", gear.height() <= cup.height() + 2)
+        assertTrue("шестерёнка не ниже столбиков: $gear vs $bars", gear.height() >= bars.height())
+        assertTrue("шестерёнка не шире кубка больше чем на деление: $gear vs $cup", gear.width() <= cup.width() + 2)
     }
 
     @Test

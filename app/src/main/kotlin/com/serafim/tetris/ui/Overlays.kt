@@ -446,7 +446,7 @@ fun MenuSheet(
 
 /** Значок статистики в углу меню: три столбика, как у остальных иконок. */
 @Composable
-private fun StatsButton(onClick: () -> Unit) {
+internal fun StatsButton(onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
         Canvas(Modifier.size(22.dp)) {
             val k = size.minDimension / 24f
